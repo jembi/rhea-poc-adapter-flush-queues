@@ -46,56 +46,22 @@ public class  RHEAPoCAdapterFlushQueuesController {
 	@RequestMapping(value = "/module/rheapocadapterflushqueues/flushQueues", method = RequestMethod.GET)
 	public void manage(ModelMap model) {
 		if (model.get("cleanup")==null)
-			model.put("cleanup", new CleanUp());
+			model.put("cleanup", new FlushQueuesResult());
 	}
 	
 	@RequestMapping(value = "/module/rheapocadapterflushqueues/flushQueues", method = RequestMethod.POST)
-	public ModelAndView runConfigurator(HttpServletRequest request, HttpServletResponse response, @ModelAttribute("cleanup") CleanUp cleanup, BindingResult errors) {
+	public ModelAndView runConfigurator(HttpServletRequest request, HttpServletResponse response, @ModelAttribute("cleanup") FlushQueuesResult cleanup, BindingResult errors) {
 		RHEAPoCAdapterFlushQueuesService fqs = Context.getService(RHEAPoCAdapterFlushQueuesService.class);
 		
 		try {
-			//cleanup.result = fqs.flushQueues();
-			cleanup.status = true;
-			cleanup.count = 100;
+			cleanup = fqs.flushQueues();
+			cleanup.setStatus(true);
 		} catch (UnexpectedRollbackException ex) {
-			cleanup.status = false;
+			log.error("Failed to flush queues: ", ex);
+			cleanup.setStatus(false);
 		}
-		
-		
-		/*
-		try {
-			cleanup.statusAuthTest = cs.performAuthenticationTest(cleanup.getAuthTestInput());
-		} catch (UnexpectedRollbackException ex) {
-			cleanup.statusAuthTest = false;
-		}
-		try {
-			cleanup.formsResult = cs.validateFormConcepts();
-		} catch (UnexpectedRollbackException ex) {
-			if (cleanup.formsResult==null)
-				cleanup.formsResult = new ValidateFormsResult();
-			cleanup.formsResult.setStatus(false);
-		}
-		*/
 		
 		return new ModelAndView("redirect:flushQueues.form");
 	}
-	
-	public static class CleanUp {
-		private Boolean status;
-		private int count;
-		private FlushQueuesResult result;
-		
-		public Boolean getStatus(){
-			return status;
-		}
-		
-		public FlushQueuesResult getResult(){
-			return result;
-		}
-		
-		public int getCount(){
-			return count;
-		}
-		
-	}
+
 }

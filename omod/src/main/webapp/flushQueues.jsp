@@ -10,14 +10,18 @@
 	
 	<c:choose>
 		<c:when test="${cleanup.status == null}">
-			<p>Click the button below to flush the adapter module queues of all messages referring 
-			to patients that are no longer in the system (i.e. those that were removed from the 
+			<p>Click the button below to flush the adapter module queues <br/> of all messages referring 
+			to patients that are no longer in the system <br/> (i.e. those that were removed from the 
 			ubudehe cleanup script).</p>
 		</c:when>
 		<c:otherwise>
 			<c:choose>
 				<c:when test="${cleanup.status == true}">
-					<p>${cleanup.count} messages removed from the queue.</p>
+					<p>${cleanup.countArchive} of ${cleanup.totalArchive} archive messages removed from the queue.</p>
+					<br/>
+					<p>${cleanup.countProcessing} of ${cleanup.totalProcessing} archive messages removed from the queue.</p>
+					<br/>
+					<p>${cleanup.countError} of ${cleanup.totalError} archive messages removed from the queue.</p>
 				</c:when>
 				<c:otherwise>
 					<p>Error flushing the queues. Check the logs for more info.</p>

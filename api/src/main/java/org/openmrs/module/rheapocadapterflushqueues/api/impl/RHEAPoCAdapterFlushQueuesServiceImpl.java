@@ -13,41 +13,22 @@
  */
 package org.openmrs.module.rheapocadapterflushqueues.api.impl;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.StringWriter;
-import java.util.Arrays;
-import java.util.LinkedList;
+import java.util.ArrayList;
 import java.util.List;
 
-import org.openmrs.Concept;
-import org.openmrs.ConceptMap;
-import org.openmrs.EncounterType;
-import org.openmrs.Form;
-import org.openmrs.GlobalProperty;
-import org.openmrs.PatientIdentifierType;
-import org.openmrs.PersonAttributeType;
-import org.openmrs.Privilege;
-import org.openmrs.RelationshipType;
-import org.openmrs.Role;
-import org.openmrs.VisitType;
-import org.openmrs.annotation.Authorized;
-import org.openmrs.api.APIException;
-import org.openmrs.api.AdministrationService;
-import org.openmrs.api.ConceptService;
-import org.openmrs.api.EncounterService;
-import org.openmrs.api.FormService;
+import org.openmrs.Patient;
 import org.openmrs.api.PatientService;
-import org.openmrs.api.PersonService;
-import org.openmrs.api.UserService;
-import org.openmrs.api.VisitService;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.impl.BaseOpenmrsService;
-import org.apache.commons.io.IOUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.openmrs.module.rheapocadapter.impl.TransactionServiceImpl;
+import org.openmrs.module.rheapocadapter.db.TransactionServiceDAO;
+import org.openmrs.module.rheapocadapter.db.hibernate.TransactionServiceDAOImpl;
+import org.openmrs.module.rheapocadapter.handler.EnteredHandler;
 import org.openmrs.module.rheapocadapter.transaction.Transaction;
+import org.openmrs.module.rheapocadapter.transaction.ArchiveTransaction;
+import org.openmrs.module.rheapocadapter.transaction.ErrorTransaction;
+import org.openmrs.module.rheapocadapter.transaction.ProcessingTransaction;
 import org.openmrs.module.rheapocadapterflushqueues.FlushQueuesResult;
 import org.openmrs.module.rheapocadapterflushqueues.api.RHEAPoCAdapterFlushQueuesService;
 import org.openmrs.module.rheapocadapterflushqueues.api.db.RHEAPoCAdapterFlushQueuesDAO;
@@ -56,33 +37,156 @@ import org.openmrs.module.rheapocadapterflushqueues.api.db.RHEAPoCAdapterFlushQu
  * It is a default implementation of {@link RHEAPoCConfiguratorService}.
  */
 public class RHEAPoCAdapterFlushQueuesServiceImpl extends BaseOpenmrsService implements RHEAPoCAdapterFlushQueuesService {
-	
-	protected final Log log = LogFactory.getLog(this.getClass());
-	
-	private RHEAPoCAdapterFlushQueuesDAO dao;
-	
-	/**
+    
+    protected final Log log = LogFactory.getLog(this.getClass());
+    
+    private RHEAPoCAdapterFlushQueuesDAO dao;
+    
+    /**
      * @param dao the dao to set
      */
     public void setDao(RHEAPoCAdapterFlushQueuesDAO dao) {
-	    this.dao = dao;
+        this.dao = dao;
     }
     
     /**
      * @return the dao
      */
     public RHEAPoCAdapterFlushQueuesDAO getDao() {
-	    return dao;
+        return dao;
     }
 
-	@Override
-	public FlushQueuesResult flushQueues() {
-		FlushQueuesResult fqr = new FlushQueuesResult();
-		
-		//List<Transaction> queues = TransactionServiceImpl.getAllQueue(null);
-		
-    	return fqr;
-	}
+    @Override
+    public FlushQueuesResult flushQueues() {
+        
+        int ttlArch=0, ttlProc=0, ttlErr=0, cntArch=0, cntProc=0, cntErr=0;
+        
+        FlushQueuesResult fqr = new FlushQueuesResult();
+        
+        EnteredHandler enteredHandler = new EnteredHandler();
+        TransactionServiceDAO tsdao = new TransactionServiceDAOImpl();
+        
+        // Get list of archive transactions in the queue
+        List<ArchiveTransaction> archiveTransactions = new ArrayList<ArchiveTransaction>();
+        archiveTransactions = (List<ArchiveTransaction>) enteredHandler
+                .getArchiveQueue();     
+        
+        // Get list of processing transactions in the queue
+        List<ProcessingTransaction> processingTransactions = new ArrayList<ProcessingTransaction>();
+        processingTransactions = (List<ProcessingTransaction>) enteredHandler
+                .getProcessingQueue();
+        
+        // Get list of error transactions in the queue
+        List<ErrorTransaction> errorTransactions = (List<ErrorTransaction>) enteredHandler
+                .getErrorQueue();
+        
+        // Get list of back entered data
+        // TODO: Check if back entered data should also be flushed
+        //List<Encounter> encounter = enteredHandler.getEncounterNotSent();
+        
+        // flush archive transactions containing patients not in local database
+        ttlArch = archiveTransactions.size();
+        for(ArchiveTransaction archTrans : archiveTransactions){
+            if(!validPatient(archTrans)){
+                tsdao.removeQueue(archTrans);
+                cntArch++;
+            }
+        }
+        
+        // flush processing transactions containing patients not in local database
+        ttlProc = processingTransactions.size();
+        for(ProcessingTransaction procTrans : processingTransactions){
+            if(!validPatient(procTrans)){
+                tsdao.removeQueue(procTrans);
+                cntProc++;
+            }
+        }
+        
+        // flush error transactions containing patients not in local database
+        ttlErr = errorTransactions.size();
+        for(ErrorTransaction errTrans : errorTransactions){
+            if(!validPatient(errTrans)){
+                tsdao.removeQueue(errTrans);
+                cntErr++;
+            }
+        }
+        
+        ttlErr = errorTransactions.size();
+        for(ErrorTransaction errTrans : errorTransactions){
+            if(!validPatient(errTrans)){
+                tsdao.removeQueue(errTrans);
+                cntErr++;
+            }
+        }
+        
+        fqr.setCountArchive(cntArch);
+        fqr.setCountProcessing(cntProc);
+        fqr.setCountError(cntErr);
+        fqr.setTotalArchive(ttlArch);
+        fqr.setTotalProcessing(ttlProc);
+        fqr.setTotalError(ttlErr);
+        fqr.setStatus(true);
+        
+        return fqr;
+    }
     
+    // check to see if patient in Transaction exists in the database
+    // method adapted from org.openmrs.module.rheapocadapter.handler.EnteredHandler.getPatientFromTransaction()
+    private Boolean validPatient(Transaction transaction){
+         PatientService patService = Context.getPatientService();
+         
+         String idInMessage = transaction.getMessage().trim();
+         /*
+         if (idInMessage.contains("EncounterId=")) {
+             continue;
+         }
+         */
+         if (idInMessage.contains("SavePatientId=") || (idInMessage.contains("UpdatePatientId="))) {
+             idInMessage = idInMessage.split("=")[1];
+             idInMessage = idInMessage.trim();
+             if(patService.getPatient(Integer.parseInt(idInMessage)) == null ||
+                     patService.getPatient(Integer.parseInt(idInMessage)).equals(null)){
+                return false;
+             }
+         } else {
+             idInMessage = idInMessage.replaceAll(",", "");
+             idInMessage = idInMessage.replace("Succeded", "").trim();
+             if (idInMessage.startsWith("Saving")) {
+                 log.info(idInMessage + " ");
+                 String[] idSplited = idInMessage.split(" ");
+                 idInMessage = idSplited[idSplited.length - 1];
+                 idInMessage = idInMessage.trim();
+                 if (idInMessage.startsWith("Id")) {
+                     idInMessage = idInMessage.substring(2);
+                     if (idInMessage.startsWith("s")) {
+                         idInMessage = idInMessage.substring(1);
+                     }
+                     if(patService.getPatient(Integer.parseInt(idInMessage)) == null ||
+                             patService.getPatient(Integer.parseInt(idInMessage)).equals(null)){
+                        return false;
+                     }
 
+                 }else if(idInMessage.startsWith("PatientId")){
+                     idInMessage = idInMessage.split("=")[1];
+                     idInMessage = idInMessage.trim();
+                     if(patService.getPatient(Integer.parseInt(idInMessage)) == null ||
+                             patService.getPatient(Integer.parseInt(idInMessage)).equals(null)){
+                        return false;
+                     }
+
+                 }
+
+             } else if ((idInMessage.startsWith("UpdatePatientId="))) {
+
+                 log.info(idInMessage + " ");
+                 idInMessage = idInMessage.split("=")[1];
+                 idInMessage = idInMessage.trim();
+                 if(patService.getPatient(Integer.parseInt(idInMessage)) == null ||
+                         patService.getPatient(Integer.parseInt(idInMessage)).equals(null)){
+                    return false;
+                 }
+             }
+         }
+        return true;
+    }
 }
