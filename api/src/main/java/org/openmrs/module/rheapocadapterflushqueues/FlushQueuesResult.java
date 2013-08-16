@@ -2,7 +2,7 @@ package org.openmrs.module.rheapocadapterflushqueues;
 
 public class FlushQueuesResult {
 	
-	private boolean status = false;
+	private boolean status;
 	private int countArchive = 0;
 	private int countProcessing = 0;
 	private int countError = 0;

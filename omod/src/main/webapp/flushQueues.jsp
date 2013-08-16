@@ -3,11 +3,9 @@
 
 <%@ include file="template/localHeader.jsp"%>
 
-<openmrs:require privilege="Manage Global Properties" otherwise="/login.htm" redirect="/module/rheapocconfigurator/testSystem.form" />
+<openmrs:require privilege="Manage Global Properties" otherwise="/login.htm" redirect="/module/rheapocadapterflushqueues/flushQueues.form" />
 
 <form:form id="flush" modelAttribute="cleanup" method="post">
-	
-	
 	<c:choose>
 		<c:when test="${cleanup.status == null}">
 			<p>Click the button below to flush the adapter module queues <br/> of all messages referring 
@@ -17,11 +15,11 @@
 		<c:otherwise>
 			<c:choose>
 				<c:when test="${cleanup.status == true}">
-					<p>${cleanup.countArchive} of ${cleanup.totalArchive} archive messages removed from the queue.</p>
+					<p>${cleanup.results.countArchive} of ${cleanup.results.totalArchive} messages flushed from the Archive Queue.</p>
 					<br/>
-					<p>${cleanup.countProcessing} of ${cleanup.totalProcessing} archive messages removed from the queue.</p>
+					<p>${cleanup.results.countProcessing} of ${cleanup.results.totalProcessing} messages flushed from the Processing Queue.</p>
 					<br/>
-					<p>${cleanup.countError} of ${cleanup.totalError} archive messages removed from the queue.</p>
+					<p>${cleanup.results.countError} of ${cleanup.results.totalError} messages flushed from the Error Queue.</p>
 				</c:when>
 				<c:otherwise>
 					<p>Error flushing the queues. Check the logs for more info.</p>

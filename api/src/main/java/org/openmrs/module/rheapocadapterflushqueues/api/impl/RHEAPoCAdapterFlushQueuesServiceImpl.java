@@ -22,8 +22,8 @@ import org.openmrs.api.context.Context;
 import org.openmrs.api.impl.BaseOpenmrsService;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.openmrs.module.rheapocadapter.db.TransactionServiceDAO;
-import org.openmrs.module.rheapocadapter.db.hibernate.TransactionServiceDAOImpl;
+import org.openmrs.module.rheapocadapter.impl.TransactionServiceImpl;
+import org.openmrs.module.rheapocadapter.service.TransactionService;
 import org.openmrs.module.rheapocadapter.handler.EnteredHandler;
 import org.openmrs.module.rheapocadapter.transaction.Transaction;
 import org.openmrs.module.rheapocadapter.transaction.ArchiveTransaction;
@@ -64,7 +64,6 @@ public class RHEAPoCAdapterFlushQueuesServiceImpl extends BaseOpenmrsService imp
         FlushQueuesResult fqr = new FlushQueuesResult();
         
         EnteredHandler enteredHandler = new EnteredHandler();
-        TransactionServiceDAO tsdao = new TransactionServiceDAOImpl();
         
         // Get list of archive transactions in the queue
         List<ArchiveTransaction> archiveTransactions = new ArrayList<ArchiveTransaction>();
@@ -80,15 +79,12 @@ public class RHEAPoCAdapterFlushQueuesServiceImpl extends BaseOpenmrsService imp
         List<ErrorTransaction> errorTransactions = (List<ErrorTransaction>) enteredHandler
                 .getErrorQueue();
         
-        // Get list of back entered data
-        // TODO: Check if back entered data should also be flushed
-        //List<Encounter> encounter = enteredHandler.getEncounterNotSent();
-        
+        log.info("Flushing transactions");
         // flush archive transactions containing patients not in local database
         ttlArch = archiveTransactions.size();
         for(ArchiveTransaction archTrans : archiveTransactions){
             if(!validPatient(archTrans)){
-                tsdao.removeQueue(archTrans);
+                enteredHandler.getQueueService().removeQueue(archTrans);
                 cntArch++;
             }
         }
@@ -97,7 +93,7 @@ public class RHEAPoCAdapterFlushQueuesServiceImpl extends BaseOpenmrsService imp
         ttlProc = processingTransactions.size();
         for(ProcessingTransaction procTrans : processingTransactions){
             if(!validPatient(procTrans)){
-                tsdao.removeQueue(procTrans);
+                enteredHandler.getQueueService().removeQueue(procTrans);
                 cntProc++;
             }
         }
@@ -106,18 +102,13 @@ public class RHEAPoCAdapterFlushQueuesServiceImpl extends BaseOpenmrsService imp
         ttlErr = errorTransactions.size();
         for(ErrorTransaction errTrans : errorTransactions){
             if(!validPatient(errTrans)){
-                tsdao.removeQueue(errTrans);
+                enteredHandler.getQueueService().removeQueue(errTrans);
                 cntErr++;
             }
         }
         
-        ttlErr = errorTransactions.size();
-        for(ErrorTransaction errTrans : errorTransactions){
-            if(!validPatient(errTrans)){
-                tsdao.removeQueue(errTrans);
-                cntErr++;
-            }
-        }
+        log.error(""+ ttlArch + ", " + ttlProc + ", " + ttlErr + ".");
+
         
         fqr.setCountArchive(cntArch);
         fqr.setCountProcessing(cntProc);
@@ -136,14 +127,12 @@ public class RHEAPoCAdapterFlushQueuesServiceImpl extends BaseOpenmrsService imp
          PatientService patService = Context.getPatientService();
          
          String idInMessage = transaction.getMessage().trim();
-         /*
-         if (idInMessage.contains("EncounterId=")) {
-             continue;
-         }
-         */
+
          if (idInMessage.contains("SavePatientId=") || (idInMessage.contains("UpdatePatientId="))) {
              idInMessage = idInMessage.split("=")[1];
              idInMessage = idInMessage.trim();
+             
+             // if patient does not exist in local db, return false
              if(patService.getPatient(Integer.parseInt(idInMessage)) == null ||
                      patService.getPatient(Integer.parseInt(idInMessage)).equals(null)){
                 return false;
@@ -161,6 +150,8 @@ public class RHEAPoCAdapterFlushQueuesServiceImpl extends BaseOpenmrsService imp
                      if (idInMessage.startsWith("s")) {
                          idInMessage = idInMessage.substring(1);
                      }
+                     
+                     // if patient does not exist in local db, return false
                      if(patService.getPatient(Integer.parseInt(idInMessage)) == null ||
                              patService.getPatient(Integer.parseInt(idInMessage)).equals(null)){
                         return false;
@@ -169,6 +160,8 @@ public class RHEAPoCAdapterFlushQueuesServiceImpl extends BaseOpenmrsService imp
                  }else if(idInMessage.startsWith("PatientId")){
                      idInMessage = idInMessage.split("=")[1];
                      idInMessage = idInMessage.trim();
+                     
+                     // if patient does not exist in local db, return false
                      if(patService.getPatient(Integer.parseInt(idInMessage)) == null ||
                              patService.getPatient(Integer.parseInt(idInMessage)).equals(null)){
                         return false;
@@ -181,6 +174,8 @@ public class RHEAPoCAdapterFlushQueuesServiceImpl extends BaseOpenmrsService imp
                  log.info(idInMessage + " ");
                  idInMessage = idInMessage.split("=")[1];
                  idInMessage = idInMessage.trim();
+                 
+                 // if patient does not exist in local db, return false
                  if(patService.getPatient(Integer.parseInt(idInMessage)) == null ||
                          patService.getPatient(Integer.parseInt(idInMessage)).equals(null)){
                     return false;

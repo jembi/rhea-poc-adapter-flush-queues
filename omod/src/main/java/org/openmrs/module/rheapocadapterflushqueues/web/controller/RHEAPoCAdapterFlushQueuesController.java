@@ -22,8 +22,8 @@ import javax.servlet.http.HttpServletResponse;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.openmrs.api.context.Context;
-import org.openmrs.module.rheapocadapterflushqueues.FlushQueuesResult;
 import org.openmrs.module.rheapocadapterflushqueues.api.RHEAPoCAdapterFlushQueuesService;
+import org.openmrs.module.rheapocadapterflushqueues.FlushQueuesResult;
 import org.springframework.stereotype.Controller;
 import org.springframework.transaction.UnexpectedRollbackException;
 import org.springframework.ui.ModelMap;
@@ -46,22 +46,49 @@ public class  RHEAPoCAdapterFlushQueuesController {
 	@RequestMapping(value = "/module/rheapocadapterflushqueues/flushQueues", method = RequestMethod.GET)
 	public void manage(ModelMap model) {
 		if (model.get("cleanup")==null)
-			model.put("cleanup", new FlushQueuesResult());
+			model.put("cleanup", new CleanUp());
 	}
 	
 	@RequestMapping(value = "/module/rheapocadapterflushqueues/flushQueues", method = RequestMethod.POST)
-	public ModelAndView runConfigurator(HttpServletRequest request, HttpServletResponse response, @ModelAttribute("cleanup") FlushQueuesResult cleanup, BindingResult errors) {
+	public ModelAndView runConfigurator(HttpServletRequest request, HttpServletResponse response, @ModelAttribute("cleanup") CleanUp cleanup, BindingResult errors) {
 		RHEAPoCAdapterFlushQueuesService fqs = Context.getService(RHEAPoCAdapterFlushQueuesService.class);
 		
 		try {
-			cleanup = fqs.flushQueues();
-			cleanup.setStatus(true);
+			log.info("Attempting to flush queues.");
+			cleanup.results = fqs.flushQueues();
 		} catch (UnexpectedRollbackException ex) {
-			log.error("Failed to flush queues: ", ex);
-			cleanup.setStatus(false);
+			log.info("Failed to flush queues: ", ex);
+			cleanup.results.setStatus(false);
+			if (cleanup.results==null){
+				cleanup.results = new FlushQueuesResult();
+			}
 		}
 		
 		return new ModelAndView("redirect:flushQueues.form");
 	}
 
+	public static class CleanUp {
+		private Boolean status = null;
+		
+		private FlushQueuesResult results = null;
+		
+		public Boolean getStatus(){
+			if(results == null){
+				return null;
+			}
+			else {
+				return results.getStatus();
+			}
+		}
+		
+		public FlushQueuesResult getResults() {
+			return results;
+		}
+		
+		public void setResults(FlushQueuesResult results){
+			this.results = results;
+		}
+
+	}
+	
 }
